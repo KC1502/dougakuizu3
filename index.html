@@ -14,76 +14,118 @@ body {
   flex-direction: column;
   align-items: center;
   min-height: 100vh;
-  background-color: #e0f7fa; /* 画面全体を薄い水色 */
+  background-color: #e0f7fa; /* 全体：薄い水色 */
+  overflow-x: hidden;
 }
 
 /* スタート画面 */
 #startContainer {
   text-align: center;
-  padding-top: 100px;
+  padding: 100px 20px;
 }
 
 /* クイズ画面レイアウト */
 #quizContainer {
   display: none; /* 最初は非表示 */
   width: 100%;
-  height: 100vh;
+  min-height: 100vh;
   display: flex;
+  flex-wrap: wrap; /* スマホで折り返せるように */
 }
 
 /* 左側ランキング欄 */
 #ranking { 
   width: 20%; 
-  background: #f5f5f5; 
+  background: rgba(255, 255, 255, 0.5); 
   padding: 15px; 
   border-right: 1px solid #ddd;
   box-sizing: border-box;
 }
 #ranking h3 { border-bottom: 2px solid #333; padding-bottom: 5px; font-size: 18px; }
-.side-rank-item { font-size: 14px; margin: 8px 0; border-bottom: 1px solid #eee; }
+.side-rank-item { font-size: 14px; margin: 8px 0; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
 
 /* メインエリア */
-#main { width: 60%; text-align: center; position: relative; }
-#side { width: 20%; }
+#main { 
+  width: 60%; 
+  text-align: center; 
+  position: relative; 
+  padding: 20px;
+  box-sizing: border-box;
+}
+#side { width: 20%; } /* PC用の余白 */
 
-#timers { position: absolute; top: 10px; right: 10px; text-align: right; }
+#timers { position: absolute; top: 10px; right: 10px; text-align: right; font-weight: bold; }
 .red { color: red; }
 
-input { padding: 10px; width: 60%; margin-top: 20px; font-size: 18px; }
-button { padding: 10px 20px; margin-top: 20px; font-size: 18px; cursor: pointer; }
+input { padding: 12px; width: 80%; max-width: 400px; margin-top: 20px; font-size: 18px; border-radius: 8px; border: 1px solid #ccc; }
+button { padding: 12px 24px; margin-top: 20px; font-size: 18px; cursor: pointer; border-radius: 8px; background: #fff; border: 2px solid #333; }
+button:hover { background: #eee; }
 
-#feedback { margin-top: 10px; font-weight: bold; font-size: 24px; }
+#feedback { margin-top: 15px; font-weight: bold; font-size: 24px; min-height: 1.5em; }
+
+/* --- 【スマホ対応：レスポンシブ設定】 --- */
+@media (max-width: 768px) {
+  #quizContainer {
+    flex-direction: column; /* 縦並びにする */
+  }
+  #ranking {
+    width: 100%;
+    order: 3; /* ランキングを一番下に */
+    border-right: none;
+    border-top: 2px solid #ddd;
+  }
+  #main {
+    width: 100%;
+    order: 1; /* クイズを一番上に */
+  }
+  #side {
+    display: none; /* 余白を消す */
+  }
+  #timers {
+    position: static; /* 固定を解除して中央付近へ */
+    text-align: center;
+    margin-bottom: 10px;
+  }
+  #player {
+    width: 100% !important; /* 動画を横幅いっぱいに */
+    height: auto !important;
+    aspect-ratio: 16 / 9;
+  }
+}
 </style>
 </head>
 
 <body>
 
 <div id="startContainer">
-  <h1>動画クイズ</h1>
-  <p>ルール：動画を見て答えを入力してください<br>制限時間は25秒です、動画を再生したらタイマーが動きます<br>正解数と回答時間でランキングが決まります</p>
-  <input type="text" id="usernameInput" placeholder="ユーザーネーム">
+  <h1 style="font-size: 40px;">動画クイズ</h1>
+  <p style="font-size: 18px; line-height: 1.6;">
+    ルール：動画を見て答えを入力してください<br>動画を再生するとタイマーが始まります<br>
+    制限時間は<b>25秒</b>です<br>正答数と回答時間でランキングが決まります
+  </p>
+  <input type="text" id="usernameInput" placeholder="ユーザーネームを入れてね">
   <br>
-  <button onclick="startQuiz()">開始</button>
+  <button onclick="startQuiz()">クイズを開始する</button>
 </div>
 
 <div id="quizContainer" style="display: none;">
   <div id="ranking">
-    <h3>🏆 TOP5 順位</h3>
+    <h3>🏆 TOP5 ランキング</h3>
     <div id="rankingList"></div>
   </div>
 
   <div id="main">
     <div id="timers">
-      <div id="countUp">0.00</div>
-      <div id="countDown">25.00</div>
+      ⏱経過: <span id="countUp">0.00</span><br>
+      残り: <span id="countDown">25.00</span>
     </div>
-    <h2 id="qNum"></h2>
+    <h2 id="qNum" style="margin-top: 40px;"></h2>
     <div id="player"></div>
     <div>
       <input type="text" id="answer" placeholder="答えを入力">
     </div>
     <div id="feedback"></div>
-    <button id="actionBtn" onclick="handleButton()">回答</button>
+    <button id="actionBtn" onclick="handleButton()">回答する</button>
   </div>
   <div id="side"></div>
 </div>
@@ -102,7 +144,6 @@ let startTime = 0;
 let elapsed = 0;
 let isAnswered = false;
 
-// 問題データ
 const questions = [
   { video:"PYjMgqRCbFk", answers:["エコぴょん","えこぴょん","エコピョン"] },
   { video:"qJXqX1q3c-A", answers:["優","松澤　優","松澤","ゆう","ゆっちゃん","松澤優"] },
@@ -111,16 +152,13 @@ const questions = [
   { video:"plp4CJ-Ri8c", answers:["わか","若杉","わかさん","若杉　亮太朗","わか。"] }
 ];
 
-// --- ランキング表示の更新機能 ---
 function updateSideRanking() {
   const rankings = JSON.parse(localStorage.getItem("rankings")) || [];
   const listElement = document.getElementById("rankingList");
-  
   if (rankings.length === 0) {
     listElement.innerHTML = "<p>まだ記録がありません</p>";
     return;
   }
-
   listElement.innerHTML = rankings.map((r, i) => `
     <div class="side-rank-item">
       <b>${i+1}位</b>: ${r.name}<br>
@@ -129,29 +167,25 @@ function updateSideRanking() {
   `).join("");
 }
 
-// --- 画面切り替え ---
 function startQuiz() {
-  const name = document.getElementById("usernameInput").value;
+  const name = document.getElementById("usernameInput").value.trim();
   if (!name) {
-    alert("名前を入力して！");
+    alert("名前を入力してください！");
     return;
   }
   username = name;
-  localStorage.setItem("username", name);
-
   document.getElementById("startContainer").style.display = "none";
   document.getElementById("quizContainer").style.display = "flex";
-  
-  updateSideRanking(); // 開始時にランキングを出す
+  updateSideRanking();
   loadQuestion();
 }
 
-// --- クイズロジック ---
 function loadQuestion() {
   if (player) player.destroy();
   player = new YT.Player('player', {
-    height: '300', width: '65%',
+    height: '360', width: '100%',
     videoId: questions[current].video,
+    playerVars: { 'playsinline': 1 }, // iPhoneでの全画面再生防止
     events: { 'onStateChange': (e) => { if(e.data === YT.PlayerState.PLAYING) startTimer(); } }
   });
 
@@ -162,8 +196,8 @@ function loadQuestion() {
   document.getElementById("answer").value = "";
   document.getElementById("answer").disabled = false;
   document.getElementById("feedback").innerText = "";
-  document.getElementById("qNum").innerText = `Q${current+1}/5`;
-  document.getElementById("actionBtn").innerText = "回答";
+  document.getElementById("qNum").innerText = `第 ${current+1} 問 / 全 5 問`;
+  document.getElementById("actionBtn").innerText = "回答する";
   isAnswered = false;
   stopTimer();
 }
@@ -205,14 +239,14 @@ function submitAnswer(timeUp = false) {
     feedback.style.color = "blue";
   } else if (isCorrect) {
     score++;
-    feedback.innerText = "正解！";
+    feedback.innerText = "正解！おめでとう！";
     feedback.style.color = "red";
   } else {
-    feedback.innerText = `不正解！正解は「${questions[current].answers[0]}」`;
+    feedback.innerText = `残念！正解は「${questions[current].answers[0]}」`;
     feedback.style.color = "blue";
   }
   document.getElementById("answer").disabled = true;
-  document.getElementById("actionBtn").innerText = "次の問題へ";
+  document.getElementById("actionBtn").innerText = "次の問題へ進む";
 }
 
 function nextQuestion() {
@@ -221,11 +255,9 @@ function nextQuestion() {
   else finishQuiz();
 }
 
-// --- 終了処理（自己ベスト更新 & ランキング保存） ---
 function finishQuiz() {
   let rankings = JSON.parse(localStorage.getItem("rankings")) || [];
   const existingIndex = rankings.findIndex(r => r.name === username);
-
   if (existingIndex !== -1) {
     const old = rankings[existingIndex];
     if (score > old.score || (score === old.score && totalTime < old.time)) {
@@ -234,32 +266,33 @@ function finishQuiz() {
   } else {
     rankings.push({ name: username, score: score, time: totalTime });
   }
-
   rankings.sort((a, b) => b.score !== a.score ? b.score - a.score : a.time - b.time);
   rankings = rankings.slice(0, 5);
   localStorage.setItem("rankings", JSON.stringify(rankings));
 
   let rankingHTML = rankings.map((r, i) => `
-    <div style="font-size: 30px; margin: 15px 0; border-bottom: 1px dashed #ccc; text-align:left;">
-      ${(i<3)?["🥇","🥈","🥉"][i]:""}${i+1}位: ${r.name} 
-      <span style="color:red; font-weight:bold;">${r.score}点</span> (${r.time.toFixed(1)}s)
+    <div style="font-size: 24px; margin: 15px 0; border-bottom: 1px dashed #ccc; text-align:left; padding: 10px; background: white; border-radius: 8px;">
+      ${(i<3)?["🥇","🥈","🥉"][i]:""}<b>${i+1}位</b>: ${r.name} 
+      <span style="color:red; font-weight:bold; float:right;">${r.score}点</span>
+      <div style="font-size: 16px; color: #666;">タイム: ${r.time.toFixed(2)}秒</div>
     </div>`).join("");
 
   document.body.innerHTML = `
-    <div style="width: 100%; text-align: center; padding-top: 50px; background-color: #e0f7fa; min-height: 100vh;">
-      <h2 style="font-size: 70px;">結果発表</h2>
-      <p style="font-size: 50px; font-weight:bold;">${username} さん</p>
-      <p style="font-size: 40px;">今回のスコア: <span style="color:red;">${score} / 5</span></p>
-      <div style="margin-top: 30px; background: white; display: inline-block; padding: 40px; border-radius: 30px; text-align: left; min-width: 450px;">
-        <h3 style="text-align:center; font-size:30px; border-bottom:3px solid #e0f7fa;">🏆 TOP5 ランキング 🏆</h3>
+    <div style="width: 100%; text-align: center; padding: 40px 10px; background-color: #e0f7fa; min-height: 100vh; box-sizing: border-box;">
+      <h2 style="font-size: 50px; margin-bottom: 10px;">結果発表</h2>
+      <p style="font-size: 30px; font-weight:bold; margin-top:0;">${username} さん</p>
+      <div style="font-size: 36px; color:red; font-weight:bold; margin-bottom: 20px;">
+        スコア: ${score} / 5
+      </div>
+      <div style="background: rgba(255,255,255,0.8); display: inline-block; padding: 20px; border-radius: 20px; text-align: left; width: 95%; max-width: 500px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+        <h3 style="text-align:center; font-size:24px; border-bottom:3px solid #e0f7fa;">🏆 歴代 TOP5 🏆</h3>
         ${rankingHTML}
       </div>
       <br>
-      <button onclick="location.reload()" style="margin-top:30px; font-size:20px; padding:10px 20px;">タイトルに戻る</button>
+      <button onclick="location.reload()" style="margin-top:30px; font-size:20px; padding:15px 30px; background:#333; color:white;">タイトルに戻って再挑戦</button>
     </div>`;
 }
 
-// Enterキー対応
 document.addEventListener("keydown", (e) => {
   if (e.key === "Enter") {
     if (document.getElementById("startContainer").style.display !== "none") startQuiz();
