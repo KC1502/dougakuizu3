@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>動画クイズ</title>
+
+<style>
+/* 共通スタイル */
+body {
+  font-family: sans-serif;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100vh;
+  background-color: #e0f7fa; /* 画面全体を薄い水色 */
+}
+
+/* スタート画面 */
+#startContainer {
+  text-align: center;
+  padding-top: 100px;
+}
+
+/* クイズ画面レイアウト */
+#quizContainer {
+  display: none; /* 最初は非表示 */
+  width: 100%;
+  height: 100vh;
+  display: flex;
+}
+
+/* 左側ランキング欄 */
+#ranking { 
+  width: 20%; 
+  background: #f5f5f5; 
+  padding: 15px; 
+  border-right: 1px solid #ddd;
+  box-sizing: border-box;
+}
+#ranking h3 { border-bottom: 2px solid #333; padding-bottom: 5px; font-size: 18px; }
+.side-rank-item { font-size: 14px; margin: 8px 0; border-bottom: 1px solid #eee; }
+
+/* メインエリア */
+#main { width: 60%; text-align: center; position: relative; }
+#side { width: 20%; }
+
+#timers { position: absolute; top: 10px; right: 10px; text-align: right; }
+.red { color: red; }
+
+input { padding: 10px; width: 60%; margin-top: 20px; font-size: 18px; }
+button { padding: 10px 20px; margin-top: 20px; font-size: 18px; cursor: pointer; }
+
+#feedback { margin-top: 10px; font-weight: bold; font-size: 24px; }
+</style>
+</head>
+
+<body>
+
+<div id="startContainer">
+  <h1>動画クイズ</h1>
+  <p>ルール：動画を見て答えを入力してください<br>制限時間は25秒です、動画を再生したらタイマーが動きます<br>正解数と回答時間でランキングが決まります</p>
+  <input type="text" id="usernameInput" placeholder="ユーザーネーム">
+  <br>
+  <button onclick="startQuiz()">開始</button>
+</div>
+
+<div id="quizContainer" style="display: none;">
+  <div id="ranking">
+    <h3>🏆 TOP5 順位</h3>
+    <div id="rankingList"></div>
+  </div>
+
+  <div id="main">
+    <div id="timers">
+      <div id="countUp">0.00</div>
+      <div id="countDown">25.00</div>
+    </div>
+    <h2 id="qNum"></h2>
+    <div id="player"></div>
+    <div>
+      <input type="text" id="answer" placeholder="答えを入力">
+    </div>
+    <div id="feedback"></div>
+    <button id="actionBtn" onclick="handleButton()">回答</button>
+  </div>
+  <div id="side"></div>
+</div>
+
+<script src="https://www.youtube.com/iframe_api"></script>
+
+<script>
+let username = "";
+let player;
+let current = 0;
+let score = 0;
+let totalTime = 0;
+let timerInterval = null;
+let isTimerRunning = false;
+let startTime = 0;
+let elapsed = 0;
+let isAnswered = false;
+
+// 問題データ
+const questions = [
+  { video:"PYjMgqRCbFk", answers:["エコぴょん","えこぴょん","エコピョン"] },
+  { video:"qJXqX1q3c-A", answers:["優","松澤　優","松澤","ゆう","ゆっちゃん","松澤優"] },
+  { video:"KqJmTMPGG3A", answers:["銀魂","ぎんたま"] },
+  { video:"mnjo5raE5WM", answers:["ケンタウルス"] },
+  { video:"plp4CJ-Ri8c", answers:["わか","若杉","わかさん","若杉　亮太朗","わか。"] }
+];
+
+// --- ランキング表示の更新機能 ---
+function updateSideRanking() {
+  const rankings = JSON.parse(localStorage.getItem("rankings")) || [];
+  const listElement = document.getElementById("rankingList");
+  
+  if (rankings.length === 0) {
+    listElement.innerHTML = "<p>まだ記録がありません</p>";
+    return;
+  }
+
+  listElement.innerHTML = rankings.map((r, i) => `
+    <div class="side-rank-item">
+      <b>${i+1}位</b>: ${r.name}<br>
+      ${r.score}点 (${r.time.toFixed(1)}s)
+    </div>
+  `).join("");
+}
+
+// --- 画面切り替え ---
+function startQuiz() {
+  const name = document.getElementById("usernameInput").value;
+  if (!name) {
+    alert("名前を入力して！");
+    return;
+  }
+  username = name;
+  localStorage.setItem("username", name);
+
+  document.getElementById("startContainer").style.display = "none";
+  document.getElementById("quizContainer").style.display = "flex";
+  
+  updateSideRanking(); // 開始時にランキングを出す
+  loadQuestion();
+}
+
+// --- クイズロジック ---
+function loadQuestion() {
+  if (player) player.destroy();
+  player = new YT.Player('player', {
+    height: '300', width: '65%',
+    videoId: questions[current].video,
+    events: { 'onStateChange': (e) => { if(e.data === YT.PlayerState.PLAYING) startTimer(); } }
+  });
+
+  elapsed = 0;
+  document.getElementById("countUp").innerText = "0.00";
+  document.getElementById("countDown").innerText = "25.00";
+  document.getElementById("countDown").classList.remove("red");
+  document.getElementById("answer").value = "";
+  document.getElementById("answer").disabled = false;
+  document.getElementById("feedback").innerText = "";
+  document.getElementById("qNum").innerText = `Q${current+1}/5`;
+  document.getElementById("actionBtn").innerText = "回答";
+  isAnswered = false;
+  stopTimer();
+}
+
+function startTimer() {
+  if (isTimerRunning) return;
+  isTimerRunning = true;
+  startTime = Date.now();
+  timerInterval = setInterval(() => {
+    elapsed = (Date.now() - startTime) / 1000;
+    const remaining = Math.max(0, 25 - elapsed);
+    document.getElementById("countUp").innerText = elapsed.toFixed(2);
+    document.getElementById("countDown").innerText = remaining.toFixed(2);
+    if (remaining <= 5) document.getElementById("countDown").classList.add("red");
+    if (remaining <= 0) { stopTimer(); totalTime += 25; submitAnswer(true); }
+  }, 10);
+}
+
+function stopTimer() { clearInterval(timerInterval); isTimerRunning = false; }
+
+function handleButton() {
+  if (!isAnswered) submitAnswer();
+  else nextQuestion();
+}
+
+function submitAnswer(timeUp = false) {
+  if (isAnswered) return;
+  isAnswered = true;
+  stopTimer();
+  if (!timeUp) totalTime += elapsed;
+
+  const userAnswer = document.getElementById("answer").value.trim().toLowerCase();
+  const correctList = questions[current].answers.map(a => a.toLowerCase());
+  const isCorrect = correctList.includes(userAnswer);
+  const feedback = document.getElementById("feedback");
+
+  if (timeUp) {
+    feedback.innerText = `時間切れ！正解は「${questions[current].answers[0]}」`;
+    feedback.style.color = "blue";
+  } else if (isCorrect) {
+    score++;
+    feedback.innerText = "正解！";
+    feedback.style.color = "red";
+  } else {
+    feedback.innerText = `不正解！正解は「${questions[current].answers[0]}」`;
+    feedback.style.color = "blue";
+  }
+  document.getElementById("answer").disabled = true;
+  document.getElementById("actionBtn").innerText = "次の問題へ";
+}
+
+function nextQuestion() {
+  current++;
+  if (current < questions.length) loadQuestion();
+  else finishQuiz();
+}
+
+// --- 終了処理（自己ベスト更新 & ランキング保存） ---
+function finishQuiz() {
+  let rankings = JSON.parse(localStorage.getItem("rankings")) || [];
+  const existingIndex = rankings.findIndex(r => r.name === username);
+
+  if (existingIndex !== -1) {
+    const old = rankings[existingIndex];
+    if (score > old.score || (score === old.score && totalTime < old.time)) {
+      rankings[existingIndex] = { name: username, score: score, time: totalTime };
+    }
+  } else {
+    rankings.push({ name: username, score: score, time: totalTime });
+  }
+
+  rankings.sort((a, b) => b.score !== a.score ? b.score - a.score : a.time - b.time);
+  rankings = rankings.slice(0, 5);
+  localStorage.setItem("rankings", JSON.stringify(rankings));
+
+  let rankingHTML = rankings.map((r, i) => `
+    <div style="font-size: 30px; margin: 15px 0; border-bottom: 1px dashed #ccc; text-align:left;">
+      ${(i<3)?["🥇","🥈","🥉"][i]:""}${i+1}位: ${r.name} 
+      <span style="color:red; font-weight:bold;">${r.score}点</span> (${r.time.toFixed(1)}s)
+    </div>`).join("");
+
+  document.body.innerHTML = `
+    <div style="width: 100%; text-align: center; padding-top: 50px; background-color: #e0f7fa; min-height: 100vh;">
+      <h2 style="font-size: 70px;">結果発表</h2>
+      <p style="font-size: 50px; font-weight:bold;">${username} さん</p>
+      <p style="font-size: 40px;">今回のスコア: <span style="color:red;">${score} / 5</span></p>
+      <div style="margin-top: 30px; background: white; display: inline-block; padding: 40px; border-radius: 30px; text-align: left; min-width: 450px;">
+        <h3 style="text-align:center; font-size:30px; border-bottom:3px solid #e0f7fa;">🏆 TOP5 ランキング 🏆</h3>
+        ${rankingHTML}
+      </div>
+      <br>
+      <button onclick="location.reload()" style="margin-top:30px; font-size:20px; padding:10px 20px;">タイトルに戻る</button>
+    </div>`;
+}
+
+// Enterキー対応
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    if (document.getElementById("startContainer").style.display !== "none") startQuiz();
+    else handleButton();
+  }
+});
+</script>
+
+</body>
+</html>
